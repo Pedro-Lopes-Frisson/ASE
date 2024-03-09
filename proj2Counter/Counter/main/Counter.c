@@ -96,7 +96,7 @@ void app_main() {
   vTaskDelay(10 / portTICK_PERIOD_MS);
   int counter = 0, secs = 0;
   while (1) {
-    if (counter % 2 != 0) {
+    if (counter % 2 == 0) {
       gpio_set_level(MOSFET_1, 0);
       gpio_set_level(LED_A, table[secs % 16][0]);
       gpio_set_level(LED_B, table[secs % 16][1]);
@@ -109,18 +109,18 @@ void app_main() {
       gpio_set_level(MOSFET_2, 1);
     } else {
       gpio_set_level(MOSFET_2, 0);
-      gpio_set_level(LED_A, table[secs / 16][0]);
-      gpio_set_level(LED_B, table[secs / 16][1]);
-      gpio_set_level(LED_C, table[secs / 16][2]);
-      gpio_set_level(LED_D, table[secs / 16][3]);
-      gpio_set_level(LED_E, table[secs / 16][4]);
-      gpio_set_level(LED_F, table[secs / 16][5]);
-      gpio_set_level(LED_G, table[secs / 16][6]);
-      gpio_set_level(LED_DP, table[secs / 16][7]);
+      gpio_set_level(LED_A, table[ (int)secs / 16][0]);
+      gpio_set_level(LED_B, table[ (int)secs / 16][1]);
+      gpio_set_level(LED_C, table[ (int)secs / 16][2]);
+      gpio_set_level(LED_D, table[ (int)secs / 16][3]);
+      gpio_set_level(LED_E, table[ (int)secs / 16][4]);
+      gpio_set_level(LED_F, table[ (int)secs / 16][5]);
+      gpio_set_level(LED_G, table[ (int)secs / 16][6]);
+      gpio_set_level(LED_DP, table[(int)secs / 16][7]);
       gpio_set_level(MOSFET_1, 1);
     }
 
-    if (counter % 100 == 0) {
+    if (counter % 100 == 0 && counter != 0) {
       secs++;
     }
 
