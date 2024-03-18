@@ -82,6 +82,18 @@ static void turn_off_leds() {
   gpio_set_level(LED_DP, 0);
 }
 
+static void turn_on_leds() {
+  gpio_set_level(LED_A, 1);
+  gpio_set_level(LED_B, 1);
+  gpio_set_level(LED_C, 1);
+  gpio_set_level(LED_D, 1);
+  gpio_set_level(LED_E, 1);
+  gpio_set_level(LED_F, 1);
+  gpio_set_level(LED_G, 1);
+  gpio_set_level(LED_DP, 1);
+  gpio_set_level(MOSFET_2, 1);
+}
+
 void update_displays(int counter, int secs) {
   if (counter % 2 == 0) {
     gpio_set_level(MOSFET_1, 0);
@@ -111,7 +123,12 @@ void update_displays(int counter, int secs) {
 void app_main() {
   configure_MOSFETS();
   configure_LEDS();
+
   turn_off_leds();
+
+  turn_on_leds();
+  while(1){}
+
   int counter = 0, secs = 0;
   while (1) {
     update_displays(counter, secs);
