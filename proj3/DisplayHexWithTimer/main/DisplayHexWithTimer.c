@@ -1,19 +1,20 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "include/pinout.h"
 #include "portmacro.h"
 #include "sdkconfig.h"
 #include <stdint.h>
+#include <unistd.h>
 #define TAG "info"
 
-static uint32_t mosfet_1 = 0, mosfet_2 = 0;
-
+static int secs = 0, counter = 0;
 static void configure_MOSFETS(void) {
   gpio_reset_pin(MOSFET_1);
   /* Set the GPIO as a push/pull output */
   gpio_set_direction(MOSFET_1, GPIO_MODE_OUTPUT);
-
   gpio_reset_pin(MOSFET_2);
   /* Set the GPIO as a push/pull output */
   gpio_set_direction(MOSFET_2, GPIO_MODE_OUTPUT);
@@ -87,9 +88,9 @@ static void turn_off_mosftet() {
   gpio_set_level(MOSFET_2, 0);
 }
 
-void update_displays(int counter, int secs) {
+void update_displays() {
   if (counter % 2 == 0) {
-    gpio_set_level(MOSFET_2, 0);
+    gpio_set_level(MOSFET_1, 0);
     gpio_set_level(LED_A, table[secs % 16][0]);
     gpio_set_level(LED_B, table[secs % 16][1]);
     gpio_set_level(LED_C, table[secs % 16][2]);
@@ -98,9 +99,9 @@ void update_displays(int counter, int secs) {
     gpio_set_level(LED_F, table[secs % 16][5]);
     gpio_set_level(LED_G, table[secs % 16][6]);
     gpio_set_level(LED_DP, table[secs % 16][7]);
-    gpio_set_level(MOSFET_1, 1);
+    gpio_set_level(MOSFET_2, 1);
   } else {
-    gpio_set_level(MOSFET_1, 0);
+    gpio_set_level(MOSFET_2, 0);
     gpio_set_level(LED_A, table[(int)secs / 16][0]);
     gpio_set_level(LED_B, table[(int)secs / 16][1]);
     gpio_set_level(LED_C, table[(int)secs / 16][2]);
@@ -109,9 +110,12 @@ void update_displays(int counter, int secs) {
     gpio_set_level(LED_F, table[(int)secs / 16][5]);
     gpio_set_level(LED_G, table[(int)secs / 16][6]);
     gpio_set_level(LED_DP, table[(int)secs / 16][7]);
-    gpio_set_level(MOSFET_2, 1);
+    gpio_set_level(MOSFET_1, 1);
   }
+  counter++;
 }
+
+static void increment_seconds() { secs = (secs + 1) % (16 * 16); }
 
 void app_main() {
   configure_MOSFETS();
@@ -120,15 +124,25 @@ void app_main() {
   turn_off_mosftet();
   turn_off_leds();
 
-  int counter = 0, secs = 0;
-  while (1) {
-    update_displays(counter, secs);
+  const esp_timer_create_args_t increment_seconds_args = {
+      .callback = &increment_seconds, .name = "IncrementSeconds"};
 
-    if (counter % 150 == 0 && counter != 0) {
-      secs++;
-    }
+  esp_timer_handle_t increment_seconds_timer;
+  ESP_ERROR_CHECK(
+      esp_timer_create(&increment_seconds_args, &increment_seconds_timer));
+  /* The timer has been created but is not running yet */
 
-    counter++;
-    vTaskDelay(10 / portTICK_PERIOD_MS);
-  }
+  /* Start timer */
+  ESP_ERROR_CHECK(esp_timer_start_periodic(increment_seconds_timer, 1e6));
+
+  const esp_timer_create_args_t update_displays_args = {
+      .callback = &update_displays, .name = "update_displays"};
+
+  esp_timer_handle_t update_displays_timer;
+  ESP_ERROR_CHECK(
+      esp_timer_create(&update_displays_args, &update_displays_timer));
+  /* The timer has been created but is not running yet */
+
+  /* Start timer */
+  ESP_ERROR_CHECK(esp_timer_start_periodic(update_displays_timer, 1e4));
 }

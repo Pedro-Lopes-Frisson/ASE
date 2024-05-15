@@ -13,7 +13,6 @@ static void configure_MOSFETS(void) {
   gpio_reset_pin(MOSFET_1);
   /* Set the GPIO as a push/pull output */
   gpio_set_direction(MOSFET_1, GPIO_MODE_OUTPUT);
-
   gpio_reset_pin(MOSFET_2);
   /* Set the GPIO as a push/pull output */
   gpio_set_direction(MOSFET_2, GPIO_MODE_OUTPUT);
@@ -119,16 +118,20 @@ void app_main() {
 
   turn_off_mosftet();
   turn_off_leds();
+  gpio_set_level(LED_A, 1);
+  gpio_set_level(LED_B, 1);
+  gpio_set_level(LED_C, 1);
+  gpio_set_level(LED_D, 1);
+  gpio_set_level(LED_E, 1);
+  gpio_set_level(LED_F, 1);
+  gpio_set_level(LED_G, 1);
+  gpio_set_level(LED_DP, 1);
 
   int counter = 0, secs = 0;
   while (1) {
-    update_displays(counter, secs);
-
-    if (counter % 150 == 0 && counter != 0) {
-      secs++;
-    }
-
-    counter++;
-    vTaskDelay(10 / portTICK_PERIOD_MS);
+      gpio_set_level(MOSFET_1, secs % 2);
+      gpio_set_level(MOSFET_2, secs % 2);
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      secs ++;
   }
 }
