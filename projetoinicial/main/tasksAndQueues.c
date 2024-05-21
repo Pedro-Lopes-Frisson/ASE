@@ -144,20 +144,18 @@ static void configure_LEDS(void)
 void check_temp(void)
 {
   struct Temp pTemp;
-  BaseType_t b;
   tc74_read_temp_after_temp(pSensorHandle, &(pTemp.temp));
   struct timeval tv_now;
   gettimeofday(&tv_now, NULL);
-  int64_t time_us = (int64_t)tv_now.tv_sec * 10000L;
-  pTemp.timestamp = time_us;
+  pTemp.timestamp = (int64_t)tv_now.tv_sec * 1000000L + (int64_t)tv_now.tv_usec;
   if (save_temps_queue != 0)
   {
-
-    b = xQueueGenericSend(save_temps_queue, &pTemp, (TickType_t)0,
-                          queueSEND_TO_BACK);
-    if (b != pdPASS)
+    printf("New temp at timestamp %lld value detected was %u\n\r",
+           (long long int)pTemp.timestamp, (uint8_t)pTemp.temp);
+    // Send the structure to the queue
+    if (xQueueSend(save_temps_queue, &pTemp, 0) != pdPASS)
     {
-      ESP_LOGE(TAG, "Failed to send message to Queue");
+      ESP_LOGE(TAG, "Failed to send temp to queue");
     }
   }
   else
@@ -168,35 +166,29 @@ void check_temp(void)
 
 void save_temps(void *pvParameters)
 {
-  struct Temp temp;
-  QueueHandle_t queue = (QueueHandle_t)((struct Save_temps_args *)pvParameters)->handler;
+  struct Temp receivedTemp;
 
-  while (true)
+  while (1)
   {
-    if (queue != 0)
+    // Wait indefinitely until data is received
+    if (xQueueReceive(save_temps_queue, &receivedTemp, portMAX_DELAY) == pdPASS)
     {
-      while (uxQueueMessagesWaiting(save_temps_queue) != 0)
+      ESP_LOGI(TAG, "Received temp: %u, timestamp: %lld", receivedTemp.temp, (long long int)receivedTemp.timestamp);
+
+      char msg[80];
+      snprintf(msg, 80, "{\"Timestamp\": %lld ,\"Temperature\":%u}", (long long int)receivedTemp.timestamp, receivedTemp.temp);
+      mqtt_publish("esp32c3", msg);
+
+      if (receivedTemp.temp != latest_temp)
       {
-        if (xQueueReceive(save_temps_queue,&temp, (TickType_t)10) == pdPASS)
-        {
-          char msg[80];
-          snprintf(msg, 80, "{\"Timestamp\": %lld ,\"Temperature\":%u}", (long long int)temp.timestamp, temp.temp);
-          mqtt_publish("esp32c3", msg);
-
-          if (temp.temp != latest_temp)
-          {
-            latest_temp = temp.temp;
-            printf("New temp at timestamp %lld value detected was %u\r",
-                   (long long int)temp.timestamp, (uint8_t)temp.temp);
-          }
-
-          temps[w_ptr] = temp.temp;
-          w_ptr = (w_ptr + 1) % MAX_TEMPS; // Ensure proper circular buffer increment
-        }
+        latest_temp = receivedTemp.temp;
+        printf("New temp at timestamp %lld value detected was %u\r",
+               (long long int)receivedTemp.timestamp, (uint8_t)receivedTemp.temp);
       }
-      vTaskDelay(pdMS_TO_TICKS(2000));
+
+      temps[w_ptr] = receivedTemp.temp;
+      w_ptr = (w_ptr + 1) % MAX_TEMPS; // Ensure proper circular buffer increment
     }
-    vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
 
@@ -316,7 +308,7 @@ void app_main(void)
   tc74_wakeup_and_read_temp(pSensorHandle, &pTemp);
   printf("\rInitial Temperature was %u C\n", pTemp);
 
-  pvParametersSaveTemps.handler = save_temps_queue = xQueueCreate(10, sizeof(struct Temp *));
+  pvParametersSaveTemps.handler = save_temps_queue = xQueueCreate(10, sizeof(struct Temp));
 
   const esp_timer_create_args_t check_temp_args = {.callback = &check_temp,
                                                    .name = "Check Temp"};
