@@ -41,9 +41,11 @@
 #define I 1
 #define W 2
 #define E 3
-void wifi_event_loop(void *arg, esp_event_base_t event_base,
+static void log_message(const int level, const char * message);
+
+static void wifi_event_loop(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data);
-extern int wifi_init_sta( uint8_t *ssid,  uint8_t *password);
+extern int wifi_init_sta(const uint8_t *ssid, const uint8_t *password);
 
 #endif // __WIFI_H__ASE__2024
 

@@ -1,0 +1,13 @@
+menu "MQTT-Client Lib 2024"
+
+config BROKER_URL_FROM_STDIN
+    bool
+    default y if BROKER_URL = "FROM_STDIN"
+
+config BROKER_URL
+    string "MQTT Broker URL"
+    default "192.168.1.20"
+    help
+        MQTT Broker URL
+
+endmenu

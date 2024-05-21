@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 
 static int s_retry_num = 0;
@@ -47,8 +48,8 @@ static int s_retry_num = 0;
 
 EventGroupHandle_t s_wifi_event_group;
 
-static void wifi_event_loop(void *arg, esp_event_base_t event_base,
-                            int32_t event_id, void *event_data) {
+void wifi_event_loop(void *arg, esp_event_base_t event_base, int32_t event_id,
+                     void *event_data) {
 
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
     esp_wifi_connect();
@@ -70,7 +71,7 @@ static void wifi_event_loop(void *arg, esp_event_base_t event_base,
   }
 }
 
-extern int wifi_init_sta(const uint8_t *ssid, const uint8_t *password) {
+extern int wifi_init_sta(uint8_t *ssid, uint8_t *password) {
   s_wifi_event_group = xEventGroupCreate();
 
   ESP_ERROR_CHECK(esp_netif_init());
@@ -91,8 +92,8 @@ extern int wifi_init_sta(const uint8_t *ssid, const uint8_t *password) {
   wifi_config_t wifi_config = {
       .sta =
           {
-              .ssid = {*ssid},
-              .password = {*password},
+              .ssid = "",
+              .password = "",
               /* Authmode threshold resets to WPA2 as default if password
                * matches WPA2 standards (password len => 8). If you want to
                * connect the device to deprecated WEP/WPA networks, Please set
@@ -105,6 +106,8 @@ extern int wifi_init_sta(const uint8_t *ssid, const uint8_t *password) {
               .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
           },
   };
+  strncpy((char *)wifi_config.sta.ssid, (char *)ssid, strlen((char *)ssid));
+  strncpy((char *)wifi_config.sta.password, (char *)password, strlen((char *)password));
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
   ESP_ERROR_CHECK(esp_wifi_start());

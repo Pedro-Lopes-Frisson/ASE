@@ -1,31 +1,22 @@
-/* WiFi station Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
+#include "include/WiFi.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
 #include "freertos/projdefs.h"
 #include "freertos/task.h"
-#include "nvs_flash.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
 
-#include "lwip/err.h"
-#include "lwip/sys.h"
+static int s_retry_num = 0;
 
-#include "TempSensorTC74.h"
-
-#include "mqtt_client.h"
-
-#define TC74ADDR 0x49
+#define TAG_WIFI CONFIG_TAG_WIFI
+#define DEBUG_TAG_WIFI CONFIG_DEBUG_COMP_WIFI_2024
+#define EXAMPLE_ESP_MAXIMUM_RETRY 5
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
@@ -55,36 +46,11 @@
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WAPI_PSK
 #endif
 
-/* The examples use WiFi configuration that you can set via project
-   configuration menu
+EventGroupHandle_t s_wifi_event_group;
 
-   If you'd rather not, just change the below entries to strings with
-   the config you want - ie #define EXAMPLE_WIFI_SSID "mywifissid"
-*/
-#define EXAMPLE_ESP_WIFI_SSID CONFIG_ESP_WIFI_SSID
-#define EXAMPLE_ESP_WIFI_PASS CONFIG_ESP_WIFI_PASSWORD
-#define EXAMPLE_ESP_MAXIMUM_RETRY CONFIG_ESP_MAXIMUM_RETRY
+void wifi_event_loop(void *arg, esp_event_base_t event_base, int32_t event_id,
+                     void *event_data) {
 
-/* FreeRTOS event group to signal when we are connected*/
-static EventGroupHandle_t s_wifi_event_group;
-/* MQTT client */
-static esp_mqtt_client_handle_t client;
-
-static void mqtt_app_start(void);
-
-/* The event group allows multiple bits for each event, but we only care about
- * two events:
- * - we are connected to the AP with an IP
- * - we failed to connect after the maximum amount of retries */
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT BIT1
-
-static const char *TAG = "wifi station";
-
-static int s_retry_num = 0;
-
-static void event_handler(void *arg, esp_event_base_t event_base,
-                          int32_t event_id, void *event_data) {
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
     esp_wifi_connect();
   } else if (event_base == WIFI_EVENT &&
@@ -92,20 +58,20 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     if (s_retry_num < EXAMPLE_ESP_MAXIMUM_RETRY) {
       esp_wifi_connect();
       s_retry_num++;
-      ESP_LOGI(TAG, "retry to connect to the AP");
+      ESP_LOGI(TAG_WIFI, "retry to connect to the AP");
     } else {
       xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
     }
-    ESP_LOGI(TAG, "connect to the AP fail");
+    ESP_LOGI(TAG_WIFI, "connect to the AP fail");
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-    ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+    ESP_LOGI(TAG_WIFI, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
     s_retry_num = 0;
     xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
   }
 }
 
-int wifi_init_sta(void) {
+extern int wifi_init_sta(uint8_t *ssid, uint8_t *password) {
   s_wifi_event_group = xEventGroupCreate();
 
   ESP_ERROR_CHECK(esp_netif_init());
@@ -119,15 +85,14 @@ int wifi_init_sta(void) {
   esp_event_handler_instance_t instance_any_id;
   esp_event_handler_instance_t instance_got_ip;
   ESP_ERROR_CHECK(esp_event_handler_instance_register(
-      WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &instance_any_id));
+      WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_loop, NULL, &instance_any_id));
   ESP_ERROR_CHECK(esp_event_handler_instance_register(
-      IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &instance_got_ip));
+      IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_loop, NULL, &instance_got_ip));
 
   wifi_config_t wifi_config = {
       .sta =
           {
-              .ssid = EXAMPLE_ESP_WIFI_SSID,
-              .password = EXAMPLE_ESP_WIFI_PASS,
+              .ssid = "eduroam",
               /* Authmode threshold resets to WPA2 as default if password
                * matches WPA2 standards (password len => 8). If you want to
                * connect the device to deprecated WEP/WPA networks, Please set
@@ -140,11 +105,13 @@ int wifi_init_sta(void) {
               .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
           },
   };
+  // strncpy((char *)wifi_config.sta.ssid, (char *)ssid, strlen((char *)ssid));
+  // strncpy((char *)wifi_config.sta.password, (char *)password, strlen((char *)password));
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
   ESP_ERROR_CHECK(esp_wifi_start());
 
-  ESP_LOGI(TAG, "wifi_init_sta finished.");
+  ESP_LOGI(TAG_WIFI, "wifi_init_sta finished.");
 
   /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or
    * connection failed for the maximum number of re-tries (WIFI_FAIL_BIT). The
@@ -156,47 +123,13 @@ int wifi_init_sta(void) {
   /* xEventGroupWaitBits() returns the bits before the call returned, hence we
    * can test which event actually happened. */
   if (bits & WIFI_CONNECTED_BIT) {
-    ESP_LOGI(TAG, "connected to ap SSID:%s password:%s", EXAMPLE_ESP_WIFI_SSID,
-             EXAMPLE_ESP_WIFI_PASS);
-    ESP_LOGW(TAG, "Starting mqtt");
-    mqtt_app_start();
+    ESP_LOGI(TAG_WIFI, "connected to ap SSID:%s password:%s", ssid, password);
     return true;
   } else if (bits & WIFI_FAIL_BIT) {
-    ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
-             EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+    ESP_LOGI(TAG_WIFI, "Failed to connect to SSID:%s, password:%s", ssid,
+             password);
   } else {
-    ESP_LOGE(TAG, "UNEXPECTED EVENT");
+    ESP_LOGE(TAG_WIFI, "UNEXPECTED EVENT");
   }
   return false;
-}
-
-
-static i2c_master_bus_handle_t pBusHandle;
-static i2c_master_dev_handle_t pSensorHandle;
-void app_main(void) {
-  tc74_init(&pBusHandle, &pSensorHandle, TC74ADDR, 1, 0, 100000);
-
-  // Initialize NVS
-  esp_err_t ret = nvs_flash_init();
-  if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
-      ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-    ESP_ERROR_CHECK(nvs_flash_erase());
-    ret = nvs_flash_init();
-  }
-  ESP_ERROR_CHECK(ret);
-
-  ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-  wifi_init_sta();
-  uint8_t temp;
-  tc74_wakeup(pSensorHandle);
-  tc74_read_temp_after_cfg(pSensorHandle, &temp);
-  char json[80];
-  ESP_LOGW(TAG, "WIFI STARTED");
-
-  while (1) {
-    tc74_read_temp_after_temp(pSensorHandle, &temp);
-    snprintf(json, 80, "{\"temp\":%d}\n", temp);
-    esp_mqtt_client_publish(client, "/topic/temp", json, 0, 0, 0);
-    vTaskDelay(pdMS_TO_TICKS(5000));
-  }
 }
