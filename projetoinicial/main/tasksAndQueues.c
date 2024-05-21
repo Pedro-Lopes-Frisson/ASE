@@ -17,6 +17,9 @@
 #include <sys/types.h>
 #include "include/mqtt_client_ase.h"
 #include "include/wifiv2.h"
+#include "esp_sntp.h"
+#include "esp_netif_sntp.h"
+#include "nvs_flash.h"
 
 #define TC74ADDR 0x49
 #define TAG "ERROR"
@@ -46,7 +49,7 @@ float map_value_to_percentage(float value)
 struct Temp
 {
   uint8_t temp;
-  int timestamp;
+  int64_t timestamp;
 } Temp;
 
 struct Save_temps_args
@@ -63,8 +66,13 @@ void check_temp(void);
 void save_temps(void *pvParameters);
 void write_temp_to_console(void);
 void update_display(void);
-QueueHandle_t save_temps_queue;
+static QueueHandle_t save_temps_queue;
 static int counter = 0;
+void default_handler1(esp_mqtt_event_handle_t event)
+{
+  printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
+  printf("DATA=%.*s\r\n", event->data_len, event->data);
+}
 
 // display - digit - Led states
 static int table[16][8] = {
@@ -138,13 +146,14 @@ void check_temp(void)
   struct Temp pTemp;
   BaseType_t b;
   tc74_read_temp_after_temp(pSensorHandle, &(pTemp.temp));
-  pTemp.timestamp = (int)time(NULL);
+  struct timeval tv_now;
+  gettimeofday(&tv_now, NULL);
+  int64_t time_us = (int64_t)tv_now.tv_sec * 10000L;
+  pTemp.timestamp = time_us;
   if (save_temps_queue != 0)
   {
 
-    printf("Sending temp at timestamp %d value detected was %u\n",
-           (int)pTemp.timestamp, (uint8_t)pTemp.temp);
-    b = xQueueGenericSend(save_temps_queue, (void *)&pTemp, (TickType_t)0,
+    b = xQueueGenericSend(save_temps_queue, &pTemp, (TickType_t)0,
                           queueSEND_TO_BACK);
     if (b != pdPASS)
     {
@@ -160,33 +169,34 @@ void check_temp(void)
 void save_temps(void *pvParameters)
 {
   struct Temp temp;
-  QueueHandle_t queue =
-      (QueueHandle_t)((struct Save_temps_args *)pvParameters)->handler;
+  QueueHandle_t queue = (QueueHandle_t)((struct Save_temps_args *)pvParameters)->handler;
+
   while (true)
   {
-    printf("ola\n");
     if (queue != 0)
     {
-      while (uxQueueMessagesWaiting(queue) != 0)
+      while (uxQueueMessagesWaiting(save_temps_queue) != 0)
       {
-        if (xQueueReceive(queue, (void *)&(temp), (TickType_t)10) == pdPASS)
+        if (xQueueReceive(save_temps_queue,&temp, (TickType_t)10) == pdPASS)
         {
-          printf("\rTemperature was %u C", pTemp);
           char msg[80];
-          snprintf(&msg, 80, "{\"Timestamp\": %d ,\"Temperature\":%u}",(int)temp.timestamp, temp.temp);
-          mqtt_publish("esp32c3", (char *)&msg);
+          snprintf(msg, 80, "{\"Timestamp\": %lld ,\"Temperature\":%u}", (long long int)temp.timestamp, temp.temp);
+          mqtt_publish("esp32c3", msg);
+
           if (temp.temp != latest_temp)
           {
             latest_temp = temp.temp;
-            printf("New temp at timestamp %d value detected was %u\n",
-                   (int)temp.timestamp, (uint8_t)temp.temp);
+            printf("New temp at timestamp %lld value detected was %u\r",
+                   (long long int)temp.timestamp, (uint8_t)temp.temp);
           }
+
           temps[w_ptr] = temp.temp;
-          w_ptr = w_ptr + 1 % MAX_TEMPS;
+          w_ptr = (w_ptr + 1) % MAX_TEMPS; // Ensure proper circular buffer increment
         }
       }
+      vTaskDelay(pdMS_TO_TICKS(2000));
     }
-    vTaskDelay(pdMS_TO_TICKS(1000 * 2));
+    vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
 
@@ -255,15 +265,21 @@ void update_pwm()
   ESP_ERROR_CHECK(ledc_update_duty(LEDC_MODE, LEDC_CHANNEL));
 }
 
-#define STACK_SIZE 4096*2
-
-static void setup_wifi(void)
-{
-}
+#define STACK_SIZE 4096 * 2
 static void setup_sntp(void)
 {
   esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
   esp_netif_sntp_init(&config);
+
+  time_t now;
+  char strftime_buf[64];
+  struct tm timeinfo;
+
+  time(&now);
+  setenv("TZ", "WET0WEST,M3.5.0/1,M10.5.0", 1);
+  tzset();
+
+  esp_netif_sntp_start();
 }
 
 void app_main(void)
@@ -286,7 +302,7 @@ void app_main(void)
   {
     vTaskDelay(1000);
   }
-
+  setup_sntp();
   printf("Connected\n stating mqtt\n");
   while (mqtt_app_start(&e) != ESP_OK)
   {
@@ -300,8 +316,7 @@ void app_main(void)
   tc74_wakeup_and_read_temp(pSensorHandle, &pTemp);
   printf("\rInitial Temperature was %u C\n", pTemp);
 
-  pvParametersSaveTemps.handler = xQueueCreate(10, sizeof(struct Temp *));
-  save_temps_queue = pvParametersSaveTemps.handler;
+  pvParametersSaveTemps.handler = save_temps_queue = xQueueCreate(10, sizeof(struct Temp *));
 
   const esp_timer_create_args_t check_temp_args = {.callback = &check_temp,
                                                    .name = "Check Temp"};
@@ -328,9 +343,7 @@ void app_main(void)
 
   /* Start timer */
   ESP_ERROR_CHECK(esp_timer_start_periodic(update_display_timer, 1e3));
-
 #endif
-
 #if MODE == 2
   const esp_timer_create_args_t update_pwm_arg = {.callback = &update_pwm,
                                                   .name = "Update LEDC"};
@@ -352,6 +365,6 @@ void app_main(void)
 
   while (true)
   {
-    vTaskDelay(100000000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }

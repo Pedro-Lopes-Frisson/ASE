@@ -426,7 +426,7 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # mqtt_client lib ase
 #
-CONFIG_BROKER_URL="mqtt:/192.168.160.49:1883"
+CONFIG_BROKER_URL="mqtt://192.168.160.49:1883"
 # end of mqtt_client lib ase
 
 #
