@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33414.496
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ASE_Dashboard", "ASE_Dashboard\ASE_Dashboard.csproj", "{DC000D8C-55E9-40D1-89E6-CED40578208A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MQTT_save_to_Mongo", "MQTT_save_to_Mongo\MQTT_save_to_Mongo.csproj", "{D1B92CBF-A777-43C1-9EAE-913117FEF56E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DC000D8C-55E9-40D1-89E6-CED40578208A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DC000D8C-55E9-40D1-89E6-CED40578208A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DC000D8C-55E9-40D1-89E6-CED40578208A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DC000D8C-55E9-40D1-89E6-CED40578208A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1B92CBF-A777-43C1-9EAE-913117FEF56E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1B92CBF-A777-43C1-9EAE-913117FEF56E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1B92CBF-A777-43C1-9EAE-913117FEF56E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1B92CBF-A777-43C1-9EAE-913117FEF56E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1D86DE6F-EE05-44B7-BD36-E2AE96AAE046}
+	EndGlobalSection
+EndGlobal

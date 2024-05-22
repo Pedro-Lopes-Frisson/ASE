@@ -1,0 +1,131 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+    List<SensorDataTC74> l = (List<SensorDataTC74>)ViewData["SensorData"];
+}
+<div class="row justify-content-center">
+    <div class="col-12">
+        <canvas id="chartTemp" class="w-100"></canvas>
+    </div>
+    <div class="col-4">
+        <canvas id="chartPressure" class="w-100"></canvas>
+    </div>
+    <div class="col-4">
+        <canvas id="chartHumidity" class="w-100"></canvas>
+    </div>
+</div>
+@section Scripts {
+    <script>
+        var data;
+        const clientId = 'mqttjs_' + Math.random().toString(16).substr(2, 8)
+        const host = 'ws://192.168.160.49:8083/mqtt'
+        const options = {
+            keepalive: 60,
+            clientId: clientId,
+            protocolId: 'MQTT',
+            protocolVersion: 4,
+            clean: true,
+            reconnectPeriod: 1000,
+            connectTimeout: 30 * 1000,
+            will: {
+                topic: 'WillMsg',
+                payload: 'Connection Closed abnormally..!',
+                qos: 0,
+                retain: false
+            },
+        }
+        console.log('Connecting mqtt client');
+
+        console.log('Connecting mqtt client')
+        const client = mqtt.connect(host, options)
+        client.on('error', (err) => {
+            console.log('Connection error: ', err)
+            client.end()
+        })
+        client.on('reconnect', () => {
+            console.log('Reconnecting...')
+        })
+        client.on('connect', () => {
+            console.log(`Client connected: ${clientId}`)
+            // Subscribe
+            client.subscribe("sensor/tc74", { qos: 0 })
+        })
+        client.on('message', (topic, message, packet) => {
+            var j = JSON.parse(message.toString());
+            console.log(`Received Message: ${message.toString()} On topic: ${topic}`)
+
+            add_data(j["Temperature"] * 1, Math.round(j["Timestamp"] / 1000000))
+        })
+        var chart_temp;
+        var yValues;
+        var xValues;
+        function updateChart() {
+            const now = new Date();
+            const tenMinutesAgo = new Date(now.getTime() - 1 * 60 * 1000);
+            const totalSecondsSinceEpoch = Math.floor(tenMinutesAgo.getTime() / 1000);
+            const nowTm = Math.floor(now.getTime() / 10000);
+
+            chart_temp.options.scales.x.min = totalSecondsSinceEpoch;
+            chart_temp.options.scales.x.max = nowTm;
+            chart_temp.update();
+        }
+        function add_data(v,t){
+            let now = new Date();
+            let nowTm = Math.floor(now.getTime() / 10000);
+            chart_temp.data.labels.push(t);
+            chart_temp.data.datasets[0].data.push(v);
+
+            chart_temp.update();
+        }
+        $().ready(function () {
+            data = @Html.Raw(Json.Serialize(l));
+            console.log(data);
+            yValues = data.map(function (v) { return v.temp });
+            xValues = data.map(function (v) { return Math.round(v.timestamp / 1000000) });
+            //setInterval(updateChart, 10000);
+            let now = new Date();
+            let tenMinutesAgo = new Date(now.getTime() - 1 * 60 * 1000);
+            let totalSecondsSinceEpoch = Math.floor(tenMinutesAgo.getTime() / 1000);
+            let nowTm = Math.floor(now.getTime() / 10000);
+
+            chart_temp = new Chart("chartTemp", {
+                type: 'line',
+                data: {
+                    labels: xValues,
+                    datasets: [{
+                        label: 'Sample Data',
+                        data: yValues,
+                        fill: false,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            },
+                            ticks:{
+                                maxTicksLimit: 11,
+                                autoSkip:true,
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Value'
+                            },
+                            ticks:{
+                            min:10,max:40}
+                        },
+                    }
+                }
+            });
+            //updateChart();
+        })
+
+    </script>
+
+            }

@@ -172,9 +172,10 @@ void save_temps(void *pvParameters)
   {
     // Wait indefinitely until data is received
     if (xQueueReceive(save_temps_queue, &receivedTemp, portMAX_DELAY) == pdPASS)
+    {
       char msg[80];
-      snprintf(msg, 80, "{\"Timestamp\": %lld ,\"Temperature\":%u}", (long long int)receivedTemp.timestamp, receivedTemp.temp);
-      mqtt_publish("esp32c3", msg);
+      snprintf(&msg, 80, "{\"Timestamp\": %lld ,\"Temperature\":%u}", (long long int)receivedTemp.timestamp, receivedTemp.temp);
+      mqtt_publish("sensor/tc74", msg);
 
       if (receivedTemp.temp != latest_temp)
       {
@@ -304,7 +305,7 @@ void app_main(void)
   // test read_temp_after_temp
   tc74_wakeup_and_read_temp(pSensorHandle, &pTemp);
   printf("\rInitial Temperature was %u C\n", pTemp);
-
+  latest_temp = pTemp;
   pvParametersSaveTemps.handler = save_temps_queue = xQueueCreate(10, sizeof(struct Temp));
 
   const esp_timer_create_args_t check_temp_args = {.callback = &check_temp,

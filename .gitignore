@@ -5,3 +5,10 @@ managed_components
 .cache
 .vscode
 .devcontainer
+**/.vs
+**/obj
+**/bin
+*.log
+/*/.vs
+/*/bin
+**/wwwroot/lib/*
