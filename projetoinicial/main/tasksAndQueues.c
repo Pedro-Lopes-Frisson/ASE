@@ -172,9 +172,6 @@ void save_temps(void *pvParameters)
   {
     // Wait indefinitely until data is received
     if (xQueueReceive(save_temps_queue, &receivedTemp, portMAX_DELAY) == pdPASS)
-    {
-      ESP_LOGI(TAG, "Received temp: %u, timestamp: %lld", receivedTemp.temp, (long long int)receivedTemp.timestamp);
-
       char msg[80];
       snprintf(msg, 80, "{\"Timestamp\": %lld ,\"Temperature\":%u}", (long long int)receivedTemp.timestamp, receivedTemp.temp);
       mqtt_publish("esp32c3", msg);
