@@ -316,7 +316,7 @@ void app_main(void)
   /* The timer has been created but is not running yet */
 
   /* Start timer */
-  ESP_ERROR_CHECK(esp_timer_start_periodic(check_temp_timer, 5e6));
+  ESP_ERROR_CHECK(esp_timer_start_periodic(check_temp_timer, 5e6 * 60));
 
   /* Tarefa */
   /* Start timer */
