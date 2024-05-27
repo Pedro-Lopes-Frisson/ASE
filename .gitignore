@@ -12,3 +12,4 @@ managed_components
 /*/.vs
 /*/bin
 **/wwwroot/lib/*
+sdkconfig*
