@@ -119,7 +119,6 @@ printf("A32\n");
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 #endif
 #if !CONFIG_CONNECT_TO_WPA2_ENTERPRISE
-printf("EAP\n");
 #ifdef CONFIG_EXAMPLE_VALIDATE_SERVER_CERT
     unsigned int ca_pem_bytes = ca_pem_end - ca_pem_start;
 #endif /* CONFIG_EXAMPLE_VALIDATE_SERVER_CERT */
